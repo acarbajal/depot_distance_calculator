@@ -35,9 +35,5 @@ ENV/
 .vscode/
 .idea/
 
-# Excel files
-*.xlsx
-*.xls
-
 # Logs
 *.log
