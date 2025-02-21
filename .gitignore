@@ -28,6 +28,7 @@ wheels/
 .DS_Store
 
 # Virtual Environment
+.venv
 ENV/
 
 # IDE
