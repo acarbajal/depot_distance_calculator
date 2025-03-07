@@ -38,7 +38,8 @@ def main(excel_file_path: str, test_limit: int = None):
         
         # Initialize handlers
         excel_handler = ExcelHandler(excel_file_path)
-        time_calculator = TimeCalculator(MAPQUEST_API_KEY)
+        #time_calculator = TimeCalculator(MAPQUEST_API_KEY, "mapquest")
+        time_calculator = TimeCalculator(GOOGLE_MAPS_API_KEY, "google")
         
         # Read depot data
         logger.info("Reading depot data from Excel file...")
