@@ -28,11 +28,11 @@ class ExcelHandler:
         if missing_cols:
             raise ValueError(f"Missing required columns: {missing_cols}")
 
-    def write_times(self, times_df: pd.DataFrame) -> None:
-        """Write driving times data to Excel file."""
+    def write_times_and_distances(self, times_and_distances_df: pd.DataFrame) -> None:
+        """Write driving times and distances data to Excel file."""
         try:
             with pd.ExcelWriter(self.file_path, mode='a', if_sheet_exists='replace') as writer:
-                times_df.to_excel(writer, sheet_name=OUTPUT_SHEET_NAME, index=False)
+                times_and_distances_df.to_excel(writer, sheet_name=OUTPUT_SHEET_NAME, index=False)
         except Exception as e:
             self.logger.error(f"Error writing to Excel file: {e}")
             raise

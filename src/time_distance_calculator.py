@@ -1,5 +1,5 @@
 #src/time_calculator.py
-#Consolidated code for calculating driving times between pairs of depots using MapQuest or Google Maps APIs.
+#Consolidated code for calculating driving times and distances between pairs of depots using MapQuest or Google Maps APIs.
 import requests
 from typing import List, Dict, Tuple
 import googlemaps
@@ -12,10 +12,10 @@ sys.path.append('..')  # Add parent directory to Python path
 
 
 
-class TimeCalculator:
+class TimeDistanceCalculator:
     def __init__(self, api_key: str, provider: str):
         """
-        Initialize TimeCalculator with an API key and provider.
+        Initialize TimeDistanceCalculator with an API key and provider.
         
         Args:
             api_key: API key for the selected provider.
@@ -31,13 +31,16 @@ class TimeCalculator:
         else:
             raise ValueError("Unsupported provider. Choose 'mapquest' or 'google'.")
     
-    def calculate_times(self, depots_df: pd.DataFrame, test_limit: int = None) -> pd.DataFrame:
+    def calculate_times_and_distances(self, depots_df: pd.DataFrame, test_limit: int = None) -> pd.DataFrame:
         """
-        Calculate driving times between all pairs of depots.
+        Calculate driving times and distances between all pairs of depots.
         
         Args:
             depots_df: DataFrame containing depot information.
             test_limit: Optional limit on number of pairs to process (for testing).
+            
+        Returns:
+            DataFrame with driving times and distances between depot pairs.
         """
         depot_pairs = list(itertools.permutations(depots_df.index, 2))
         
@@ -45,40 +48,54 @@ class TimeCalculator:
             depot_pairs = depot_pairs[:test_limit]
             self.logger.info(f"Running in test mode with {test_limit} depot pairs")
         
-        times_data = []
+        times_distances_data = []
         
         for idx1, idx2 in depot_pairs:
             depot1 = depots_df.iloc[idx1]
             depot2 = depots_df.iloc[idx2]
             
             try:
-                time = self._get_driving_time(depot1["Depot Address"], 
-                                              depot2["Depot Address"])
+                time, distance = self._get_driving_info(depot1["Depot Address"], 
+                                                       depot2["Depot Address"])
                 
-                times_data.append({
+                times_distances_data.append({
                     "Depot 1 Designation": depot1["Depot Designation"],
                     "Depot 1 Address": depot1["Depot Address"],
                     "Depot 2 Designation": depot2["Depot Designation"],
                     "Depot 2 Address": depot2["Depot Address"],
-                    "Driving Time (minutes)": time
+                    "Driving Time (minutes)": time,
+                    "Driving Distance (miles)": distance
                 })
                 
                 sleep(0.2)  # Delay to avoid hitting API rate limits
                 
             except Exception as e:
-                self.logger.error(f"Error calculating time between {depot1['Depot Designation']} and {depot2['Depot Designation']}: {e}")
+                self.logger.error(f"Error calculating time and distance info between {depot1['Depot Designation']} and {depot2['Depot Designation']}: {e}")
         
-        return pd.DataFrame(times_data)
+        return pd.DataFrame(times_distances_data)
     
-    def _get_driving_time(self, origin: str, destination: str) -> float:
-        """Get driving time between two addresses using the selected provider."""
-        if self.provider == "mapquest":
-            return self._get_driving_time_mapquest(origin, destination)
-        elif self.provider == "google":
-            return self._get_driving_time_google(origin, destination)
+    # For backward compatibility
+    def calculate_times(self, depots_df: pd.DataFrame, test_limit: int = None) -> pd.DataFrame:
+        """
+        Legacy method for calculating only driving times.
         
-    def _get_driving_time_mapquest(self, origin: str, destination: str) -> float:
-        """Get driving time using MapQuest API."""
+        Args:
+            depots_df: DataFrame containing depot information.
+            test_limit: Optional limit on number of pairs to process (for testing).
+        """
+        self.logger.warning("calculate_times is deprecated, use calculate_times_and_distances instead")
+        df = self.calculate_times_and_distances(depots_df, test_limit)
+        return df.drop(columns=["Driving Distance (miles)"])
+    
+    def _get_driving_info(self, origin: str, destination: str) -> Tuple[float, float]:
+        """Get driving time and distance between two addresses using the selected provider."""
+        if self.provider == "mapquest":
+            return self._get_driving_info_mapquest(origin, destination)
+        elif self.provider == "google":
+            return self._get_driving_info_google(origin, destination)
+        
+    def _get_driving_info_mapquest(self, origin: str, destination: str) -> Tuple[float, float]:
+        """Get driving time and distance using MapQuest API."""
         try:
             url = "http://www.mapquestapi.com/directions/v2/route"
             params = {
@@ -100,14 +117,18 @@ class TimeCalculator:
             if data.get("info", {}).get("statuscode") != 0:
                 raise ValueError(f"MapQuest API error: {data['info']['messages']}")
             
-            return data["route"]["time"] / 60.0
+            # Return time in minutes and distance in miles
+            time_minutes = data["route"]["time"] / 60.0
+            distance_miles = data["route"]["distance"]
+            
+            return time_minutes, distance_miles
         
         except Exception as e:
-            self.logger.error(f"Error calculating driving time (MapQuest): {e}")
+            self.logger.error(f"Error calculating driving info (MapQuest): {e}")
             raise
     
-    def _get_driving_time_google(self, origin: str, destination: str) -> float:
-        """Get driving time using Google Maps API."""
+    def _get_driving_info_google(self, origin: str, destination: str) -> Tuple[float, float]:
+        """Get driving time and distance using Google Maps API."""
         try:
             result = self.gmaps.distance_matrix(
                 origins=[origin],
@@ -116,14 +137,17 @@ class TimeCalculator:
                 #uncomment the following two lines for real-time driving times estimates
                 #departure_time="now",
                 #traffic_model="best_guess",
-                units="metric"
+                units="metric" 
             )
             
             if result["rows"][0]["elements"][0]["status"] == "OK":
-                # Return time in minutes
-                return result["rows"][0]["elements"][0]["duration"]["value"] / 60
+                # Return time in minutes and distance in miles
+                time_minutes = result["rows"][0]["elements"][0]["duration"]["value"] / 60
+                distance_miles = result["rows"][0]["elements"][0]["distance"]["value"] / 1609.34 # transform to miles
+                
+                return time_minutes, distance_miles
             else:
-                raise ValueError(f"Could not calculate time: {result['rows'][0]['elements'][0]['status']}")
+                raise ValueError(f"Could not calculate route info: {result['rows'][0]['elements'][0]['status']}")
         
         except Exception as e:
             self.logger.error(f"Error in Google Maps API call: {e}")
