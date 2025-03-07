@@ -50,7 +50,9 @@ class TimeDistanceCalculator:
         
         times_distances_data = []
         
-        for idx1, idx2 in depot_pairs:
+        for idx, (idx1, idx2) in enumerate(depot_pairs):
+            self.logger.info(f"Processing pair {idx+1}/{len(depot_pairs)}: {idx1}-{idx2}")
+            
             depot1 = depots_df.iloc[idx1]
             depot2 = depots_df.iloc[idx2]
             
@@ -71,6 +73,8 @@ class TimeDistanceCalculator:
                 
             except Exception as e:
                 self.logger.error(f"Error calculating time and distance info between {depot1['Depot Designation']} and {depot2['Depot Designation']}: {e}")
+            
+            self.logger.info(f"Completed pair {idx+1}/{len(depot_pairs)}")
         
         return pd.DataFrame(times_distances_data)
     
